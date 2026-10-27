@@ -186,15 +186,6 @@ page from where it was injected), race conditions, anything behind MFA or
 CAPTCHA, and deep single-page-app state. A DAST tool covers a slice of the
 attack surface — pair it with dependency scanning and static analysis.
 
-## Design decisions worth defending
-
-See the original design document for the full interview-prep Q&A
-(`docs/ProbeDAST_Complete_Engineering_Design_Document.pdf` if you've kept a
-copy, or ask about any of: why async over threads, why RabbitMQ over
-asyncio.Queue, how the session race is prevented, why time-based probes run
-serially, how false positives are kept down, what the structural-signature
-dedup is for).
-
 ## License
 
 Choose one before publishing (MIT is a reasonable default for a portfolio
