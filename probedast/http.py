@@ -110,8 +110,8 @@ class ScopedClient:
         ) as r:
             raw = await r.content.read(self.max_bytes + 1)
             truncated = len(raw) > self.max_bytes
-            body = raw[: self.max_bytes].decode(r.get_encoding() if hasattr(r, "get_encoding") else "utf-8",
-                                                 errors="replace")
+            encoding = r.charset or "utf-8"
+            body = raw[: self.max_bytes].decode(encoding, errors="replace")
             set_cookies = [c for c in r.headers.getall("Set-Cookie", [])] if hasattr(r.headers, "getall") else []
             return RawResponse(status=r.status, headers={k.lower(): v for k, v in r.headers.items()},
                                 body=body, elapsed=0.0, url=str(r.url), set_cookies=set_cookies,

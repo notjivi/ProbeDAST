@@ -52,6 +52,7 @@ class Config:
     def from_dict(cls, d: dict) -> "Config":
         d = dict(d)
         login = d.pop("login", None)
+        d = {k: v for k, v in d.items() if not k.startswith("_")}
         cfg = cls(**d)
         if login:
             cfg.login = LoginRecipe(**login)

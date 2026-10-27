@@ -39,18 +39,29 @@ def mask_value(body: str, value: str) -> str:
 
 
 def structural_shape(body: str) -> dict:
-    """Coarse structural fingerprint: tag counts and total text length, not raw bytes.
-    Falls back to a plain-text shape (line/word counts) for non-HTML bodies."""
+    """Coarse structural fingerprint: tag counts and total text length."""
     try:
-        soup = BeautifulSoup(body, "lxml")
+        soup = BeautifulSoup(body, "html.parser")
         tags = {}
-        for t in soup.find_all(True):
-            tags[t.name] = tags.get(t.name, 0) + 1
-        text_len = len(soup.get_text())
-        return {"tags": tags, "text_len": text_len, "html": True}
-    except Exception:
-        return {"tags": {}, "text_len": len(body), "lines": body.count("\n"), "html": False}
 
+        for tag in soup.find_all(True):
+            tags[tag.name] = tags.get(tag.name, 0) + 1
+
+        text_len = len(soup.get_text())
+
+        return {
+            "tags": tags,
+            "text_len": text_len,
+            "html": True,
+        }
+
+    except Exception:
+        return {
+            "tags": {},
+            "text_len": len(body),
+            "lines": body.count("\n"),
+            "html": False,
+        }
 
 def shape_distance(a: dict, b: dict) -> float:
     """0.0 = identical shape, grows with tag-count and text-length divergence."""

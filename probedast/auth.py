@@ -19,7 +19,8 @@ at once. The fix is three layers:
 from __future__ import annotations
 import asyncio
 import time
-
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
 from .config import LoginRecipe
 from .http import ScopedClient
 
@@ -69,11 +70,47 @@ class SessionManager:
         self.sessions: dict = {}     # role -> cookie dict
 
     async def login(self, role: str) -> dict:
+        # Fetch the login form to obtain CSRF tokens and session cookies.
+        form_response = await self.client.get(self.recipe.login_url)
+
+        soup = BeautifulSoup(form_response.body, "html.parser")
+        form = soup.find("form")
+
+        data = {}
+        post_url = self.recipe.login_url
+
+        if form:
+            # Preserve hidden inputs such as DVWA's user_token.
+            for item in form.find_all("input"):
+                name = item.get("name")
+                input_type = (item.get("type") or "").lower()
+
+                if name and input_type == "hidden":
+                    data[name] = item.get("value", "")
+
+            # Respect the login form's action URL.
+            action = form.get("action")
+            if action:
+                post_url = urljoin(self.recipe.login_url, action)
+
         creds = self.recipe.users[role]
-        data = {self.recipe.username_field: creds["username"], self.recipe.password_field: creds["password"]}
+        data[self.recipe.username_field] = creds["username"]
+        data[self.recipe.password_field] = creds["password"]
         data.update(self.recipe.extra_fields)
-        resp = await self.client.post(self.recipe.login_url, data=data, allow_dangerous=True)
-        cookies = self._parse_set_cookies(resp.set_cookies)
+
+        # Reuse the session cookie that received the CSRF token.
+        cookies = self._parse_set_cookies(form_response.set_cookies)
+
+        response = await self.client.post(
+            post_url,
+            data=data,
+            cookies=cookies,
+            allow_dangerous=True,
+        )
+
+        # Preserve cookies from the login response as well.
+        cookies.update(self._parse_set_cookies(response.set_cookies))
+
         self.sessions[role] = cookies
         return cookies
 
