@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ProbeDAST Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #12151c; --border: #22262f; --text: #e6e8eb; --muted: #8b93a1;
+    --crit: #ff5c6c; --high: #ff9f43; --med: #ffd166; --low: #6fb3ff; --ok: #3ddc97; --accent: #7c8cff;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg:#f6f7f9; --panel:#ffffff; --border:#e3e6eb; --text:#1a1d23; --muted:#5b6472; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  h1 { font-size: 18px; margin:0; font-weight:600; letter-spacing:0.2px; }
+  .pill { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight:600; border:1px solid var(--border); }
+  .pill.running { color: var(--accent); border-color: var(--accent); }
+  .pill.completed { color: var(--ok); border-color: var(--ok); }
+  main { padding: 24px 28px; display:grid; grid-template-columns: 280px 1fr; gap:20px; max-width:1200px; margin:0 auto; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px; }
+  .stat { display:flex; justify-content:space-between; padding:6px 0; font-size:13px; color:var(--muted); }
+  .stat b { color: var(--text); }
+  .finding { border-left: 3px solid var(--border); padding: 10px 14px; margin-bottom:10px; border-radius:6px; background: rgba(255,255,255,0.02); }
+  .finding.critical { border-color: var(--crit); }
+  .finding.high { border-color: var(--high); }
+  .finding.medium { border-color: var(--med); }
+  .finding.low { border-color: var(--low); }
+  .finding .row1 { display:flex; justify-content:space-between; font-size:13px; }
+  .sev { font-weight:700; text-transform:uppercase; font-size:11px; letter-spacing:0.5px; }
+  .sev.critical { color: var(--crit); } .sev.high { color: var(--high); }
+  .sev.medium { color: var(--med); } .sev.low { color: var(--low); }
+  .endpoint { color: var(--muted); font-size:12px; margin-top:4px; word-break:break-all; }
+  input, button, select { background: var(--panel); color: var(--text); border:1px solid var(--border);
+    border-radius:6px; padding:8px 10px; font-size:13px; }
+  button { cursor:pointer; background: var(--accent); color:#fff; border:none; font-weight:600; }
+  button:disabled { opacity:0.5; cursor:default; }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px 0; text-align:center; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+const API_BASE = window.PROBEDAST_API || "http://localhost:8000";
+
+function sevRank(s) { return { critical: 0, high: 1, medium: 2, low: 3 }[s] ?? 9; }
+
+function App() {
+  const [target, setTarget] = useState("http://localhost:3000");
+  const [scopeHost, setScopeHost] = useState("localhost:3000");
+  const [scanId, setScanId] = useState(null);
+  const [scan, setScan] = useState(null);
+  const [findings, setFindings] = useState([]);
+  const wsRef = useRef(null);
+
+  async function startScan() {
+    const resp = await fetch(`${API_BASE}/scans`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target, scope_hosts: [scopeHost] }),
+    });
+    const data = await resp.json();
+    setScanId(data.scan_id);
+    setFindings([]);
+  }
+
+  async function stopScan() {
+    if (!scanId) return;
+    await fetch(`${API_BASE}/scans/${scanId}/stop`, { method: "POST" });
+  }
+
+  useEffect(() => {
+    if (!scanId) return;
+    const poll = setInterval(async () => {
+      try {
+        const r = await fetch(`${API_BASE}/scans/${scanId}`);
+        if (r.ok) setScan(await r.json());
+      } catch (e) {}
+    }, 1500);
+
+    try {
+      const ws = new WebSocket(`${API_BASE.replace("http", "ws")}/scans/${scanId}/live`);
+      ws.onmessage = (ev) => {
+        const finding = JSON.parse(ev.data);
+        setFindings((prev) => [finding, ...prev]);
+      };
+      wsRef.current = ws;
+    } catch (e) {}
+
+    return () => { clearInterval(poll); wsRef.current?.close(); };
+  }, [scanId]);
+
+  const sorted = [...findings].sort((a, b) => sevRank(a.severity) - sevRank(b.severity));
+  const status = scan?.status || (scanId ? "RUNNING" : null);
+
+  return (
+    <React.Fragment>
+      <header>
+        <h1>ProbeDAST</h1>
+        <input placeholder="target URL" value={target} onChange={(e) => setTarget(e.target.value)} style={{ width: 240 }} />
+        <input placeholder="scope host:port" value={scopeHost} onChange={(e) => setScopeHost(e.target.value)} style={{ width: 160 }} />
+        <button onClick={startScan} disabled={status === "RUNNING"}>Start scan</button>
+        <button onClick={stopScan} disabled={status !== "RUNNING"} style={{ background: "#444" }}>Kill switch</button>
+        {status && <span className={`pill ${status === "COMPLETED" ? "completed" : "running"}`}>{status}</span>}
+      </header>
+      <main>
+        <div className="card">
+          <div className="stat"><span>Endpoints</span><b>{scan?.progress?.endpoints_found ?? "—"}</b></div>
+          <div className="stat"><span>Jobs</span><b>{scan ? `${scan.progress?.jobs_done ?? 0}/${scan.progress?.jobs_total ?? 0}` : "—"}</b></div>
+          <div className="stat"><span>Confirmed</span><b>{scan?.progress?.findings_confirmed ?? findings.length}</b></div>
+          <div className="stat"><span>Rejected</span><b>{scan?.progress?.findings_rejected ?? "—"}</b></div>
+          {scanId && <div className="stat"><span>Scan ID</span><b style={{ fontSize: 11 }}>{scanId.slice(0, 8)}…</b></div>}
+          {scanId && <div style={{ marginTop: 10 }}>
+            <a href={`${API_BASE}/scans/${scanId}/report?fmt=markdown`} target="_blank" style={{ color: "var(--accent)", fontSize: 12 }}>
+              Download report ↗
+            </a>
+          </div>}
+        </div>
+        <div>
+          {sorted.length === 0 && <div className="empty">No findings yet. Start a scan against a local vulnerable target.</div>}
+          {sorted.map((f, i) => (
+            <div key={i} className={`finding ${f.severity}`}>
+              <div className="row1">
+                <span><span className={`sev ${f.severity}`}>{f.severity}</span> &nbsp; {f.vuln_type}</span>
+                <span style={{ color: "var(--muted)" }}>{f.status}</span>
+              </div>
+              <div className="endpoint">{f.endpoint}</div>
+            </div>
+          ))}
+        </div>
+      </main>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

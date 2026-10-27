@@ -1,0 +1,59 @@
+# ProbeDAST local lab (design doc Phase 1, Day 1).
+#
+# Brings up the three benchmark targets plus the infra ProbeDAST itself uses
+# at multi-process scale. For a single-process run (see README "Quick start"),
+# only the *-vuln services are actually required; postgres/redis/rabbitmq
+# exist for the distributed configuration in Phase 4.
+#
+#   docker compose up -d dvwa juice-shop webgoat
+#   docker compose up -d                      # everything, including infra
+#
+# Safety: every service here binds to 127.0.0.1 only, so the vulnerable apps
+# are never exposed beyond this machine.
+
+services:
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    ports: ["127.0.0.1:4280:80"]
+    restart: unless-stopped
+
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    ports: ["127.0.0.1:4281:3000"]
+    restart: unless-stopped
+
+  webgoat:
+    image: webgoat/webgoat:latest
+    ports: ["127.0.0.1:4282:8080", "127.0.0.1:4283:9090"]
+    environment:
+      WEBGOAT_HOST: "127.0.0.1"
+      WEBGOAT_PORT: "8080"
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports: ["127.0.0.1:5432:5432"]
+    environment:
+      POSTGRES_USER: probedast
+      POSTGRES_PASSWORD: probedast
+      POSTGRES_DB: probedast
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports: ["127.0.0.1:6379:6379"]
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: probedast
+      RABBITMQ_DEFAULT_PASS: probedast
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,0 +1,29 @@
+{
+  "target": "http://127.0.0.1:4281/",
+  "scope_hosts": ["127.0.0.1:4281"],
+  "scope_paths": ["/"],
+  "safe_mode": true,
+  "verify": true,
+  "verify_rounds": 3,
+  "max_pages": 300,
+  "max_endpoints": 400,
+  "rps": 15,
+  "js_fallback": true,
+  "time_delay": 3.0,
+  "time_samples": 5,
+  "login": {
+    "login_url": "http://127.0.0.1:4281/rest/user/login",
+    "username_field": "email",
+    "password_field": "password",
+    "success_indicator": "token",
+    "check_url": "http://127.0.0.1:4281/rest/user/whoami",
+    "users": {
+      "A": { "username": "pdast-a@example.com", "password": "ProbeDAST!a1" },
+      "B": { "username": "pdast-b@example.com", "password": "ProbeDAST!b1" }
+    },
+    "owned_markers": {
+      "A": ["pdast-a@example.com"]
+    }
+  },
+  "_notes": "Juice Shop's login endpoint returns JSON with a bearer token, not a Set-Cookie session -- auth.py's cookie-based SessionManager needs a thin JSON-token subclass for this target before the login step will actually authenticate requests; see docs/benchmark.md. Juice Shop renders most routes client-side, hence js_fallback: true and the Playwright dependency."
+}

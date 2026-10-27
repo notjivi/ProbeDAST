@@ -1,0 +1,28 @@
+{
+  "target": "http://127.0.0.1:4282/WebGoat/",
+  "scope_hosts": ["127.0.0.1:4282"],
+  "scope_paths": ["/WebGoat/"],
+  "safe_mode": true,
+  "verify": true,
+  "verify_rounds": 3,
+  "max_pages": 400,
+  "max_endpoints": 500,
+  "rps": 10,
+  "time_delay": 3.0,
+  "time_samples": 5,
+  "login": {
+    "login_url": "http://127.0.0.1:4282/WebGoat/login",
+    "username_field": "username",
+    "password_field": "password",
+    "success_indicator": "Logout",
+    "check_url": "http://127.0.0.1:4282/WebGoat/start.mvc",
+    "users": {
+      "A": { "username": "pdast-a", "password": "ProbeDAST!a1" },
+      "B": { "username": "pdast-b", "password": "ProbeDAST!b1" }
+    },
+    "owned_markers": {
+      "A": ["pdast-a"]
+    }
+  },
+  "_notes": "Register both pdast-a and pdast-b through WebGoat's self-registration page before the first scan -- there is no seeded account. WebGoat's lesson framework uses one shared session cookie per browser-looking client, so run crawl_role A and B scans as separate ProbeDAST invocations against the same target rather than relying on the two-session IDOR path for lesson pages."
+}
